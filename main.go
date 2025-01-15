@@ -4,7 +4,12 @@ package main
 
 import (
 	"io"
+	"log"
 	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"regexp"
 )
 
 func GetWithHeader(client *http.Client, url string, header *http.Header) ([]byte, error) {
@@ -13,7 +18,9 @@ func GetWithHeader(client *http.Client, url string, header *http.Header) ([]byte
 		return nil, err
 	}
 
-	req.Header = *header
+	if header != nil {
+		req.Header = *header
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -35,5 +42,30 @@ func main() {
 			return nil
 		},
 	}
-	GetWithHeader(client, "https://www.sweetscape.com/010editor/repository/templates/", nil)
+
+	var get = func(url string) ([]byte, error) {
+		return GetWithHeader(client, url, nil)
+	}
+
+	bytes, err := get("https://www.sweetscape.com/010editor/repository/templates/")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	stringSubmatched := regexp.MustCompile(`href="(.*bt)">Download</a>`).FindAllStringSubmatch(string(bytes), -1)
+	for _, t := range stringSubmatched {
+		u, _ := url.Parse(t[1])
+		base, err := url.Parse("https://www.sweetscape.com/010editor/repository/templates/")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		directLink := base.ResolveReference(u)
+		bytes, err := get(directLink.String())
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		os.WriteFile(path.Base(u.Path), bytes, 0644)
+	}
 }
